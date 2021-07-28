@@ -118,6 +118,7 @@ func DecodeNxAction(data []byte) Action {
 	case NXAST_RESUBMIT:
 		a = new(NXActionResubmit)
 	case NXAST_SET_TUNNEL:
+		a = new(NXActionSetTunnel)
 	case NXAST_DROP_SPOOFED_ARP:
 	case NXAST_SET_QUEUE:
 	case NXAST_POP_QUEUE:
@@ -1457,4 +1458,53 @@ func NewNXActionController(controllerID uint16) *NXActionController {
 	a.ControllerID = controllerID
 	a.Length = a.NXActionHeader.Len() + 6
 	return a
+}
+
+
+type NXActionSetTunnel struct {
+	*NXActionHeader
+	pad [2]byte
+	TunnelID  uint32
+}
+
+func NewNXActionSetTunnel(tunnelID uint32) *NXActionSetTunnel {
+	a := new(NXActionSetTunnel)
+	a.NXActionHeader = NewNxActionHeader(NXAST_SET_TUNNEL)
+	a.Length = a.NXActionHeader.Len() + 6
+	a.pad = [2]byte{}
+	a.TunnelID = tunnelID
+	return a
+}
+
+func (a *NXActionSetTunnel) Len() (n uint16) {
+	return a.Length
+}
+
+func (a *NXActionSetTunnel) MarshalBinary() (data []byte, err error) {
+	data = make([]byte, int(a.Len()))
+	var b []byte
+	n := 0
+
+	b, err = a.NXActionHeader.MarshalBinary()
+	copy(data[n:], b)
+	n += len(b)
+	// Skip padding copy, move the index.
+	n += 2
+	binary.BigEndian.PutUint32(data[n:], a.TunnelID)
+	n += 4
+
+	return
+}
+
+func (a *NXActionSetTunnel) UnmarshalBinary(data []byte) error {
+	n := 0
+	a.NXActionHeader = new(NXActionHeader)
+	err := a.NXActionHeader.UnmarshalBinary(data[n:])
+	n += int(a.NXActionHeader.Len())
+	if len(data) < int(a.Len()) {
+		return errors.New("the []byte is too short to unmarshal a full NXActionConjunction message")
+	}
+	a.TunnelID = binary.BigEndian.Uint32(data[n:])
+
+	return err
 }
